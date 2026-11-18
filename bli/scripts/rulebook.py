@@ -32,8 +32,8 @@ import string
 class BLIRulebook(BLIBasic):
 
     def __init__(self, TOKENIZER_INPATH=None, MODEL_INPATH=None, HF_MODEL_NAME=None, \
-        TARGET_FILE_PATH=None, OUTPATH="lexicon.json", batch_size=500, iterations=3, threshold=0.5, PARAMS_DIR = None) -> None:
-        super().__init__(TOKENIZER_INPATH, MODEL_INPATH, HF_MODEL_NAME, TARGET_FILE_PATH, OUTPATH, batch_size, iterations, threshold)            
+        TARGET_FILE_PATH=None, OUTPATH="lexicon.json", batch_size=500, iterations=3, threshold=0.5, PARAMS_DIR = None, script = "dev") -> None:
+        super().__init__(TOKENIZER_INPATH, MODEL_INPATH, HF_MODEL_NAME, TARGET_FILE_PATH, OUTPATH, batch_size, iterations, threshold, script)            
         self.prev_trans_matrix = defaultdict(lambda:defaultdict(lambda:0))
         self.trans_matrix = defaultdict(lambda:defaultdict(lambda:0))
         self.totals = defaultdict(lambda:1)
@@ -66,12 +66,12 @@ class BLIRulebook(BLIBasic):
             # good_chars = {ch for ch in all_source if ch not in string.punctuation and \
             #     not ch.isspace() and ch!="।"}
             source_chars = set("".join(sent["text"] for sent in self.rem_sentences)) 
-            source_chars = {ch for ch in source_chars if self.is_dev(ch)}
+            source_chars = {ch for ch in source_chars if self.is_correct_script(ch)}
             source_chars.add(self.null_char)
 
             tokenizer_vocab = set(self.tokenizer.vocab.keys())
             target_chars = set("".join(word for word in tokenizer_vocab))
-            target_chars = {ch for ch in target_chars if self.is_dev(ch)}
+            target_chars = {ch for ch in target_chars if self.is_correct_script(ch)}
             target_chars.add(self.null_char)
 
             return source_chars, target_chars
@@ -225,7 +225,7 @@ class BLIRulebook(BLIBasic):
         if self.training:
             min_dist, best_word = math.inf, ""
             for cand in cand_target_words:
-                if cand.strip() == "" or not self.is_dev(cand):
+                if cand.strip() == "" or not self.is_correct_script(cand):
                     continue
                 dist_score = self.find_neg_log_prob(source, cand)
                 if dist_score < min_dist:
@@ -235,7 +235,7 @@ class BLIRulebook(BLIBasic):
 
         # cand_target_words.append(source)
         dist_scores = [(cand, self.find_neg_log_prob(source, cand)) \
-            for cand in cand_target_words if self.is_dev(cand)]
+            for cand in cand_target_words if self.is_correct_script(cand)]
         best_pairs = sorted(dist_scores, key = lambda x:x[1])[:num_targets]
 
         return best_pairs
@@ -332,6 +332,8 @@ def get_args():
         help="Number of iterations of the whole data (algorithm performs revisions on previously learnt words).")
     parser.add_argument("--lang", type=str, default="unk", \
         help="Target language")
+    parser.add_argument("--script", type=str, default="dev", choices=["dev", "latin"], \
+        help="Script of the words to translate and of the candidate translations (dev: Devanagari)")
     
     args = parser.parse_args()
     return args
@@ -368,7 +370,7 @@ if __name__=="__main__":
     
     bli_obj = BLIRulebook(HF_MODEL_NAME=HF_MODEL_NAME, \
         TARGET_FILE_PATH=TARGET_FILE_PATH, OUTPATH=OUTPATH, PARAMS_DIR=PARAMS_DIR, \
-        batch_size=batch_size, iterations=iterations, threshold=threshold)
+        batch_size=batch_size, iterations=iterations, threshold=threshold, script=args.script)
     bli_obj.main()
 
 # %%

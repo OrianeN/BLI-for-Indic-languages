@@ -10,6 +10,7 @@ import json
 import os, sys
 import argparse
 import atexit
+import unicodedata
 sys.path.append("../../")
 from utils import get_tokenizers
 from tqdm import tqdm
@@ -51,8 +52,9 @@ class BLIBasic:
     def __init__(self, TOKENIZER_INPATH = None, MODEL_INPATH = None, HF_MODEL_NAME = None,\
         TARGET_FILE_PATH = None,\
         OUTPATH = "lexicon.json",\
-        batch_size = 500, iterations = 3, threshold = 0.5) -> None:
+        batch_size = 500, iterations = 3, threshold = 0.5, script = "dev") -> None:
         self.mask_token = "[MASK]"
+        self.script = script
         self.TOKENIZER_INPATH = TOKENIZER_INPATH
         self.MODEL_INPATH = MODEL_INPATH
         self.HF_MODEL_NAME = HF_MODEL_NAME
@@ -77,7 +79,13 @@ class BLIBasic:
         self.threshold = threshold
         self.max_length = 512
 
-    def is_dev(self, s):
+    def is_correct_script(self, s):
+        '''Check that all characters of s belong to the script chosen with --script'''
+        if self.script == "latin":
+            for c in s:
+                if not (c.isalpha() and unicodedata.name(c, "").startswith("LATIN")):
+                    return False
+            return True
         dev_range = range(2305, 2404)
         for c in s:
             if ord(c) not in dev_range:
@@ -217,7 +225,7 @@ class BLIBasic:
                 if source_rep:
                     words[idx] = source_rep
                 else:
-                    if self.is_dev(word):
+                    if self.is_correct_script(word):
                         unknown_set.add(word)
 
             # Create different batch element for each unknown word
@@ -258,7 +266,7 @@ class BLIBasic:
         # vowel_range = list(range(2305, 2315)) + list(range(2317, 2325)) + list(range(2365, 2384))
         # bad_char_range = range(2364, 2367)
 
-        sim_scores = [(cand, self.sim_func(word, cand)) for cand in cand_target_words if self.is_dev(cand)]
+        sim_scores = [(cand, self.sim_func(word, cand)) for cand in cand_target_words if self.is_correct_script(cand)]
 
         best_pairs = sorted(sim_scores, key = lambda x:x[1], reverse=True)[:num_targets]
         if best_pairs:
@@ -405,6 +413,8 @@ def get_args():
         help="Number of iterations of the whole data (algorithm performs revisions on previously learnt words).")
     parser.add_argument("--lang", type=str, default="unk", \
         help="Target language")
+    parser.add_argument("--script", type=str, default="dev", choices=["dev", "latin"], \
+        help="Script of the words to translate and of the candidate translations (dev: Devanagari)")
     
     args = parser.parse_args()
     return args
@@ -438,6 +448,6 @@ if __name__=="__main__":
     
     bli_obj = BLIBasic(HF_MODEL_NAME=HF_MODEL_NAME, \
         TARGET_FILE_PATH=TARGET_FILE_PATH, OUTPATH=OUTPATH, \
-        batch_size=batch_size, iterations=iterations, threshold=threshold)
+        batch_size=batch_size, iterations=iterations, threshold=threshold, script=args.script)
 
     bli_obj.main()
