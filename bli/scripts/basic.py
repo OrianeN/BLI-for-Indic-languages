@@ -148,11 +148,13 @@ class BLIBasic:
 
     def post_init(self):
         '''Add identical entries when word is present in the Hindi tokenizer'''
-        self.get_target_data()
+        # Read sentences into a local variable: get_target_data() would reset the queue self.rem_sentences
+        with open(self.TARGET_FILE_PATH, "r", encoding="utf8") as f:
+            sentences = f.read().split("\n")
         tokenizer_vocab = set(self.tokenizer.vocab.keys())
 
-        for sent in self.rem_sentences:
-            words = sent["text"].split()
+        for sent in sentences:
+            words = sent.split()
             for word in words:
                 if word in tokenizer_vocab:
                     self.bil_dict[word][word] = 1
@@ -192,6 +194,10 @@ class BLIBasic:
 
         #Optional
         self.order_rem_sentences()
+
+        # Stop when no sentence with unknown words is left (rem_sentences[0] would fail)
+        if not self.rem_sentences:
+            return list(), self.min_iterations
 
         # This is the number of iterations that each sentence has definitely had
         curr_iterations = self.rem_sentences[0]["processed"]
